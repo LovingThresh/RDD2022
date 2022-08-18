@@ -18,8 +18,11 @@ from PIL import Image
 import albumentations as A
 
 transform_fn = A.Compose([
+    A.Resize(512, 512),
     A.HorizontalFlip(p=0.5),
     A.RandomBrightnessContrast(p=0.2),
+    A.Normalize(),
+    A.ToTensorV2(),
 ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['class_labels']))
 
 
@@ -118,49 +121,51 @@ class VOCDataset(Dataset):
         bbox = []
         label = []
 
-        for obj in anno.findall('object'):
-
-            bndbox_anno = obj.find('bndbox')
-            box = []
-            for tag in ('xmin', 'ymin', 'xmax', 'ymax'):
-                box.append(int(bndbox_anno.find(tag).text) - 1)
-            bbox.append(box)
-
-            name = obj.find('name').text.strip()
-            if name not in Config.VOC_BBOX_LABEL_NAMES:
-                print("Name Error")
-                print(idd)
-                print("-----------")
-            else:
-                label.append(Config.VOC_BBOX_LABEL_NAMES.index(name))
-        if len(bbox) == 0:
-            print("Bbox Error")
-            print(idd)
-            print("-----------")
-        elif len(label) == 0:
-            print("Label Error")
-            print(idd)
-            print("-----------")
+        if anno.find('object') is None:
+            bbox.append([0, 0, 100, 100])
+            label.append(0)
         else:
-            bboxes = np.stack(bbox).astype(np.float32)
-            class_labels = np.stack(label).astype(np.uint8)
+            for obj in anno.findall('object'):
+                bndbox_anno = obj.find('bndbox')
+                box = []
+                for tag in ('xmin', 'ymin', 'xmax', 'ymax'):
+                    if tag == 'xmin' or 'xmax':
+                        box.append(round((float(bndbox_anno.find(tag).text)), 6))
+                    elif tag == 'ymin' or 'ymax':
+                        box.append(round((float(bndbox_anno.find(tag).text)), 6))
+                bbox.append(box)
+
+                name = obj.find('name').text.strip()
+                label.append(Config.VOC_BBOX_LABEL_NAMES.index(name) + 1)
+
+        bboxes = np.stack(bbox).astype(np.float32)
+        class_labels = np.stack(label).astype(np.uint8)
 
         # 获取对应图片
         image = cv2.imread(self.data_dir + '/images/' + idd + '.jpg')
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # transformed = self.transform(image=image, bboxes=bboxes, class_labels=class_labels)
-        # transformed_image = transformed['image']
-        # transformed_bboxes = transformed['bboxes']
-        # transformed_class_labels = transformed['class_labels']
-        # return transformed_image, transformed_bboxes, transformed_class_labels
-        return 0
+        if anno.find('object') is not None:
+            target = {}
+            transformed = self.transform(image=image, bboxes=bboxes, class_labels=class_labels)
+            transformed_image = transformed['image']
+            target['boxes'] = transformed['bboxes']
+            target['labels'] = transformed['class_labels']
+        else:
+            target = {}
+            transformed = self.transform(image=image, bboxes=bboxes, class_labels=class_labels)
+            transformed_image = transformed['image']
+            target['boxes'] = [(0., 0., 0., 0.)]
+            target['labels'] = [0]
+
+        return transformed_image, target
 
 
 train_dataset = VOCDataset(r'L:\RDD2022_all_countries\Norway\train', mode='train', transform=transform_fn)
 Train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=1, shuffle=True)
 for _ in range(10505):
     a = next(iter(Train_loader))
+    print(1)
 
 # with open(r'L:\RDD2022_all_countries\Norway\train.txt', 'w') as f:
 #     for file in os.listdir(r'L:\RDD2022_all_countries\Norway\train\images/'):
