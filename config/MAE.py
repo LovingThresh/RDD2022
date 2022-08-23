@@ -49,13 +49,13 @@ if not prefetch:
 
 # dataset summary
 data = dict(
-    samples_per_gpu=48,
+    samples_per_gpu=32,
     workers_per_gpu=1,
     train=dict(
         type=dataset_type,
         data_source=dict(
             type=data_source,
-            data_prefix='L:/dataset/train-set',
+            data_prefix='F:/dataset/train-set',
             ann_file=None,
         ),
         pipeline=train_pipeline,
